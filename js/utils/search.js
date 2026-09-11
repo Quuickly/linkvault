@@ -22,8 +22,8 @@ export function filterLinks(links, { categoryId = null, type = null, favoritesOn
   });
 }
 
-// Sort links
-export function sortLinks(links, sortBy = 'newest') {
+// Sort links — pinned first, then apply chosen sort, with optional favorites bubble-up
+export function sortLinks(links, sortBy = 'newest', favoritesFirst = false) {
   const sorted = [...links];
   switch (sortBy) {
     case 'name-asc': sorted.sort((a, b) => a.title.localeCompare(b.title)); break;
@@ -36,15 +36,20 @@ export function sortLinks(links, sortBy = 'newest') {
       return bDate - aDate;
     }); break;
   }
-  // Always put pinned items first
-  return sorted.sort((a, b) => (b.isPinned ? 1 : 0) - (a.isPinned ? 1 : 0));
+  // Priority: pinned=2, favorite (when favoritesFirst)=1, normal=0
+  return sorted.sort((a, b) => {
+    const aPriority = a.isPinned ? 2 : (favoritesFirst && a.isFavorite ? 1 : 0);
+    const bPriority = b.isPinned ? 2 : (favoritesFirst && b.isFavorite ? 1 : 0);
+    return bPriority - aPriority;
+  });
 }
 
 // Combined: search + filter + sort
-export function getFilteredLinks({ query = '', categoryId = null, type = null, favoritesOnly = false, sortBy = 'newest' } = {}) {
+// favoritesFirst: when true, favorites bubble to the top (used in "All Links" view)
+export function getFilteredLinks({ query = '', categoryId = null, type = null, favoritesOnly = false, favoritesFirst = false, sortBy = 'newest' } = {}) {
   let links = store.getLinks();
   links = searchLinks(links, query);
   links = filterLinks(links, { categoryId, type, favoritesOnly });
-  links = sortLinks(links, sortBy);
+  links = sortLinks(links, sortBy, favoritesFirst);
   return links;
 }

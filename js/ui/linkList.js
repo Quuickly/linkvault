@@ -3,7 +3,7 @@ import { icons } from './icons.js';
 import { setupCardDrag } from '../utils/dragdrop.js';
 import { openModal } from './modal.js';
 import { toast } from './toast.js';
-import { formatDate, truncate, escapeHtml, getFaviconUrl } from '../utils/helpers.js';
+import { formatDate, escapeHtml } from '../utils/helpers.js';
 
 let currentView = 'grid';
 let currentLinks = [];
@@ -24,29 +24,21 @@ export function setView(view) {
 export function renderLinks(links, title) {
   currentLinks = links;
   currentTitle = title;
-  
+
   const mainContent = document.getElementById('mainContent');
   if (!mainContent) return;
 
-  if (links.length === 0) {
-    mainContent.innerHTML = `
-      <div class="content-header">
-        <h1>${escapeHtml(title)}</h1>
-      </div>
-      <div class="empty-state">
-        <div class="empty-state-icon">${icons.folder}</div>
-        <h2 class="empty-state-title">No links found</h2>
-        <p class="empty-state-text">There are no links in this view. Add your first link to get started!</p>
-        <button class="btn btn-primary" id="emptyAddBtn">
-          ${icons.plus} Add your first link
-        </button>
-      </div>
-    `;
-    document.getElementById('emptyAddBtn')?.addEventListener('click', () => openModal());
-    return;
-  }
+  // Always render the header + filter pills regardless of whether links are empty.
+  // This ensures user can always navigate back to "All" type.
+  const filterPillsHtml = `
+    <div class="filter-pills">
+      ${['all', 'website', 'document', 'tool', 'other'].map(type =>
+        `<button class="filter-pill ${currentFilters.type === type ? 'active' : ''}" data-type="${type}">${type.charAt(0).toUpperCase() + type.slice(1)}</button>`
+      ).join('')}
+    </div>
+  `;
 
-  let html = `
+  const headerHtml = `
     <div class="content-header">
       <h1>${escapeHtml(title)} <span class="badge badge-category">${links.length}</span></h1>
       <div class="content-actions">
@@ -63,17 +55,35 @@ export function renderLinks(links, title) {
         </div>
       </div>
     </div>
-    <div class="filter-pills">
-      ${['all', 'website', 'document', 'tool', 'other'].map(type => 
-        `<button class="filter-pill ${currentFilters.type === type ? 'active' : ''}" data-type="${type}">${type.charAt(0).toUpperCase() + type.slice(1)}</button>`
-      ).join('')}
-    </div>
+    ${filterPillsHtml}
+  `;
+
+  if (links.length === 0) {
+    mainContent.innerHTML = `
+      ${headerHtml}
+      <div class="empty-state">
+        <div class="empty-state-icon">${icons.folder}</div>
+        <h2 class="empty-state-title">No links found</h2>
+        <p class="empty-state-text">Tidak ada link di tampilan ini. Tambahkan link baru atau ubah filter.</p>
+        <button class="btn btn-primary" id="emptyAddBtn">
+          ${icons.plus} Add Link
+        </button>
+      </div>
+    `;
+    document.getElementById('emptyAddBtn')?.addEventListener('click', () => openModal());
+    attachHeaderEvents();
+    return;
+  }
+
+  const cardsHtml = links.map(link => renderLinkCard(link)).join('');
+
+  mainContent.innerHTML = `
+    ${headerHtml}
     <div class="${currentView === 'grid' ? 'link-cards-grid' : 'link-cards-list'}">
-      ${links.map(link => renderLinkCard(link)).join('')}
+      ${cardsHtml}
     </div>
   `;
 
-  mainContent.innerHTML = html;
   attachEvents();
 }
 
@@ -84,20 +94,14 @@ function renderLinkCard(link) {
   const pinnedClass = link.isPinned ? ' pinned' : '';
   const favIcon = link.isFavorite ? icons.starFilled : icons.star;
   const favClass = link.isFavorite ? ' active' : '';
-  const faviconSrc = link.favicon || getFaviconUrl(link.url) || '';
   const lastAccessed = link.lastAccessedAt ? formatDate(link.lastAccessedAt) : '';
-  
+
   return `
     <div class="link-card${pinnedClass}" data-id="${link.id}" draggable="true">
       <div class="link-card-header">
-        <div class="link-card-favicon">
-          ${faviconSrc 
-            ? `<img src="${escapeHtml(faviconSrc)}" alt="" onerror="this.parentElement.innerHTML='${icons.link}'">`
-            : icons.link}
-        </div>
         <div class="link-card-info">
-          <div class="link-card-title" title="${escapeHtml(link.title)}">${escapeHtml(link.title)}</div>
-          <div class="link-card-url" title="${escapeHtml(link.url)}">${escapeHtml(truncate(link.url, 45))}</div>
+          <div class="link-card-title">${escapeHtml(link.title)}</div>
+          <div class="link-card-url" title="${escapeHtml(link.url)}">${escapeHtml(link.url)}</div>
         </div>
         <div class="link-card-actions">
           <button class="btn-icon favorite-btn${favClass}" data-id="${link.id}" title="Toggle favorite">
@@ -120,8 +124,28 @@ function renderLinkCard(link) {
         </div>
         ${lastAccessed ? `<span class="link-card-meta">${lastAccessed}</span>` : ''}
       </div>
+      <div class="link-card-watermark">${icons.link}</div>
     </div>
   `;
+}
+
+function attachHeaderEvents() {
+  // Attach only header/filter events (used when links are empty)
+  document.getElementById('gridViewBtn')?.addEventListener('click', () => setView('grid'));
+  document.getElementById('listViewBtn')?.addEventListener('click', () => setView('list'));
+
+  document.getElementById('sortSelect')?.addEventListener('change', (e) => {
+    currentFilters.sortBy = e.target.value;
+    if (updateCallback) updateCallback();
+  });
+
+  const filterPills = document.querySelectorAll('.filter-pill');
+  filterPills.forEach(pill => {
+    pill.addEventListener('click', () => {
+      currentFilters.type = pill.dataset.type;
+      if (updateCallback) updateCallback();
+    });
+  });
 }
 
 function attachEvents() {
@@ -131,11 +155,9 @@ function attachEvents() {
   const cards = container.querySelectorAll('.link-card');
   cards.forEach(card => {
     const linkId = card.dataset.id;
-    
-    // Setup drag & drop with proper linkId
+
     setupCardDrag(card, linkId);
-    
-    // Open link on card click (unless clicking a button)
+
     card.addEventListener('click', (e) => {
       if (!e.target.closest('button') && !e.target.closest('a')) {
         const link = store.getLink(linkId);
@@ -156,7 +178,7 @@ function attachEvents() {
     });
   });
 
-  // More action buttons (context menu)
+  // More action buttons
   const moreBtns = document.querySelectorAll('.more-btn');
   moreBtns.forEach(btn => {
     btn.addEventListener('click', (e) => {
@@ -165,28 +187,11 @@ function attachEvents() {
     });
   });
 
-  // View toggles
-  document.getElementById('gridViewBtn')?.addEventListener('click', () => setView('grid'));
-  document.getElementById('listViewBtn')?.addEventListener('click', () => setView('list'));
-
-  // Sort select
-  document.getElementById('sortSelect')?.addEventListener('change', (e) => {
-    currentFilters.sortBy = e.target.value;
-    if (updateCallback) updateCallback();
-  });
-
-  // Type filter pills
-  const filterPills = document.querySelectorAll('.filter-pill');
-  filterPills.forEach(pill => {
-    pill.addEventListener('click', () => {
-      currentFilters.type = pill.dataset.type;
-      if (updateCallback) updateCallback();
-    });
-  });
+  // Also attach header events
+  attachHeaderEvents();
 }
 
 function showContextMenu(e, id) {
-  // Remove any existing context menu
   document.querySelectorAll('.context-menu').forEach(m => m.remove());
 
   const link = store.getLink(id);
@@ -194,7 +199,7 @@ function showContextMenu(e, id) {
 
   const menu = document.createElement('div');
   menu.className = 'context-menu';
-  
+
   menu.innerHTML = `
     <div class="context-menu-item" data-action="edit">${icons.edit} <span>Edit</span></div>
     <div class="context-menu-item" data-action="duplicate">${icons.copy} <span>Duplicate</span></div>
@@ -205,22 +210,19 @@ function showContextMenu(e, id) {
   `;
 
   document.body.appendChild(menu);
-  
-  // Position the menu
+
   const rect = e.currentTarget.getBoundingClientRect();
   let top = rect.bottom + 4;
   let left = rect.right - menu.offsetWidth;
-  
-  // Ensure menu stays in viewport
+
   if (top + menu.offsetHeight > window.innerHeight) {
     top = rect.top - menu.offsetHeight - 4;
   }
   if (left < 0) left = 8;
-  
+
   menu.style.top = `${top}px`;
   menu.style.left = `${left}px`;
 
-  // Handle actions
   menu.addEventListener('click', (event) => {
     const action = event.target.closest('.context-menu-item')?.dataset.action;
     if (!action) return;
@@ -242,7 +244,7 @@ function showContextMenu(e, id) {
         window.open(link.url, '_blank');
         break;
       case 'delete':
-        if (confirm('Are you sure you want to delete this link?')) {
+        if (confirm('Hapus link ini?')) {
           store.deleteLink(id);
           toast.success('Link deleted');
         }
@@ -251,14 +253,13 @@ function showContextMenu(e, id) {
     menu.remove();
   });
 
-  // Close menu when clicking outside
   const closeMenu = (evt) => {
     if (!menu.contains(evt.target)) {
       menu.remove();
       document.removeEventListener('click', closeMenu);
     }
   };
-  
+
   setTimeout(() => {
     document.addEventListener('click', closeMenu);
   }, 0);

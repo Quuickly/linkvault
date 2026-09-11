@@ -42,23 +42,7 @@
   gap: 12px;
 }
 
-.link-card-favicon {
-  width: 40px;
-  height: 40px;
-  border-radius: var(--radius-md);
-  background: var(--color-bg-secondary);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
-  overflow: hidden;
-}
-
-.link-card-favicon img {
-  width: 100%;
-  height: 100%;
-  object-fit: contain;
-}
+/* Favicon removed — no longer displayed */
 
 .link-card-info {
   flex: 1;
@@ -67,11 +51,14 @@
 
 .link-card-title {
   font-weight: var(--font-weight-semibold);
-  font-size: var(--font-size-md);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  font-size: var(--font-size-sm);
+  /* Wrap long titles instead of truncating */
+  overflow-wrap: break-word;
+  word-break: break-word;
+  white-space: normal;
   color: var(--color-text);
+  line-height: 1.4;
+  margin-bottom: 4px;
 }
 
 .link-card-url {
@@ -88,6 +75,7 @@
   gap: 4px;
   opacity: 0;
   transition: opacity var(--transition-base);
+  flex-shrink: 0;
 }
 
 .link-card:hover .link-card-actions {
@@ -126,6 +114,27 @@
   font-size: var(--font-size-xs);
   color: var(--color-text-muted);
 }
+
+/* Watermark link icon — decorative, bottom-right corner of card */
+.link-card-watermark {
+  position: absolute;
+  bottom: 12px;
+  right: 12px;
+  color: var(--color-text-muted);
+  opacity: 0.12;
+  pointer-events: none;
+  transition: opacity var(--transition-base);
+}
+
+.link-card-watermark svg {
+  width: 28px;
+  height: 28px;
+}
+
+.link-card:hover .link-card-watermark {
+  opacity: 0.2;
+}
+
 
 .link-cards-list .link-card {
   flex-direction: row;

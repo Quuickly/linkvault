@@ -54,10 +54,11 @@ function refreshContent() {
     });
     title = cat ? cat.name : 'Category';
   } else {
-    // 'all' view
+    // 'all' view — favorites bubble to the top
     links = getFilteredLinks({
       query: currentSearchQuery,
       type: typeFilter !== 'all' ? typeFilter : null,
+      favoritesFirst: true,
       sortBy
     });
     title = 'All Links';
